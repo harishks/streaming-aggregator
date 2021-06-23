@@ -1,9 +1,9 @@
 
-#Problem Statement
+# Problem Statement
 <p>In reality, a single processor or machine cannot handle the input volume. Input RPS can be in the 10,000s or 100,000s. How do you scale your solution in a 
 distributed environment?</p>
 
-#Solution
+# Solution
 <p>Before looking into the system design aspects behind such large-scale stream processing systems, it would be worthwhile to define some concrete terminologies relevant 
 to this problem statement.</p>
 
