@@ -37,7 +37,7 @@ that can span across event boundaries. These states can be retained in-memory or
 </li>
 
 
-##Assumptions :
+## Assumptions :
 
 <li>Source under consideration is a streaming source, whose data is partitioned based on producer’s partitioning logic. Also, each partition contains ordered, 
 immutable sequence of records - each with a unique offset within the partition.</li> 
@@ -59,11 +59,11 @@ Also, we are assuming that node and disk failures are rare events, and the commo
 then using a remote state-store would be the obvious choice, which results in increased bootstrapping time for the tasks that are relaunched and increased job restart times. 
 Another technique can be to use log-compacted Kafka topic to track state changes per task/job. </li>  
 
-##Design Considerations
+## Design Considerations
 
 <p>Building a scalable high-throughput stream processing engine poses several design challenges. Design of one such system should subsume the following key design aspects </p>
 
-###Scalable Task Assignment Strategy
+### Scalable Task Assignment Strategy
 
 <p>Based on our assumptions, we have established that the streaming source is partitioned, which denotes the unit of parallelism for the underlying stream. Also, 
 the job doesn't require a cross-partition processing logic. If required, the input stream can be re-partitioned before feeding the results into the next stage pipeline/task. 
