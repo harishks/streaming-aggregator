@@ -7,6 +7,7 @@ distributed environment?</p>
 <p>Before looking into the system design aspects behind such large-scale stream processing systems, it would be worthwhile to define some concrete terminologies relevant 
 to this problem statement.</p>
 
+
 ## Terminology:
 <li>
 Streams - set of messages that usually belongs to a common category. For instance, a stream can be composed of Netflix titles streamed by the user 
