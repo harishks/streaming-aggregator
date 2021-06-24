@@ -10,7 +10,7 @@ to this problem statement.</p>
 
 ## Terminology:
 <li>
-Streams - set of messages that usually belongs to a common category. For instance, a stream can be composed of Netflix titles streamed by the user 
+Streams - set of messages that usually belongs to a common category. For instance, a stream can be composed of Netflix titles watched by the user 
 along with related dimensions like country, device, etc. Streams can be broadly categorized into two types :
 <ol>
 <li>Unbounded streams - emanating from a streaming source like Kinesis, Kafka, changelog events from a DB etc.</li>
@@ -46,7 +46,7 @@ immutable sequence of records - each with a unique offset within the partition.<
 <li>Stream processing engine supports “atleast-once” processing guarantee.</li>
 <li>The streaming job under consideration is throughput intensive and not compute intensive. Compute intensive jobs would need per-task optimizations, 
 whereas throughput intensive streams are amenable to horizontal scaling techniques. </li>
-<li>Streams consist of offsets, which can be used to replay the stream from any given point. This assumption helps replay the data if the job needs any re-processing logic.</li>
+<li>Data sources are persistent and consist of offsets, which can be used to replay the stream from any given point. This assumption helps replay the data if the job needs any re-processing logic.</li>
 <li>The streaming application/job under consideration does not have `m:1` style operator logic which involves data shuffling stage.</li>
 <li>A given task consumes data only from “one” partition and does not have the need to read from multiple partitions and/or different streams in order to satisfy the job 
 requirements. Effectively this would mean that, we are not considering a job that can perform `JOIN` operation from multiple input streams.
@@ -80,6 +80,9 @@ However, there is a need for an external task coordination system that can help 
 can help schedule these tasks via an external resource manager to get the desired amount of compute and memory resources to execute the data pipeline. Note that, the number 
 of tasks spawned per job is bound by the number of partitions in the incoming data stream. Increasing the number of tasks beyond the partition count would not be beneficial 
 and might lead to wasted resources in the system. </p>
+
+<p>Data exchanges of streams transformed by one task/pipeline to the other can be made efficient by adding intermediate buffering layer to compensate for spikes in the traffic. Also,
+it can help in inducing a clean backpressure mechanism between consuming tasks and producing tasks when the pipelines are chained together.</p>
 
 <p>Task-coordinators can help monitor the health of all the tasks belonging to a job by simple monitoring mechanisms like periodic heartbeat exchange with the tasks, etc. 
 Potentially, task coordinators can be notified about changes in the input stream partitions, which can allow task-coordinators to spawn additional tasks to maintain the 

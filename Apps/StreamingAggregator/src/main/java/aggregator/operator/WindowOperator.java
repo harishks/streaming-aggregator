@@ -63,7 +63,6 @@ public class WindowOperator<T extends TimestampEvent, W, V> extends Operator<T, 
         long windowTimestamp = getWindowTimestamp(event.eventTimestamp());
         NavigableMap<Long, V> sortedMap = map;
         if (sortedMap == null) {
-          //System.out.println("Creating a new Map for key " + w);
           sortedMap = new TreeMap<>();
         }
         if (sortedMap.containsKey(windowTimestamp)) {

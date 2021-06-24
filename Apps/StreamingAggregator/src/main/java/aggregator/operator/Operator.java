@@ -21,6 +21,7 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public abstract class Operator<I, O> {
   private final AtomicLong eventsProcessed;
+  private final AtomicLong eventsFailedProcessing;
   private final Set<Operator<O, ?>> _nextOperatorSet; // Ordered set of operators down the chain
   private final Set<Operator<?, I>> _prevOperatorSet; // Ordered set of operators up the chain
   private long currentWatermark = 0;
@@ -29,6 +30,7 @@ public abstract class Operator<I, O> {
     this._nextOperatorSet = new LinkedHashSet<>();
     this._prevOperatorSet = new LinkedHashSet<>();
     this.eventsProcessed = new AtomicLong(0);
+    this.eventsFailedProcessing = new AtomicLong(0);
   }
 
   public void registerNextOp(Operator<O, ?> operator) {
@@ -45,9 +47,8 @@ public abstract class Operator<I, O> {
    */
   public CompletionStage<Void> onEvent(I event) {
     try {
-      eventsProcessed.incrementAndGet();
       CompletionStage<Collection<O>> completableResults = handleEvent(event);
-
+      eventsProcessed.incrementAndGet();
       if (!getNextOperatorSet().isEmpty()) {
         return completableResults.thenCompose(results -> CompletableFuture.allOf(
             results.stream().flatMap(r -> this._nextOperatorSet.stream().map(op -> op.onEvent(r))).toArray(CompletableFuture[]::new)));
@@ -55,12 +56,25 @@ public abstract class Operator<I, O> {
         return CompletableFuture.completedFuture(null);
       }
     } catch (Exception e) {
+      eventsFailedProcessing.incrementAndGet();
       return CompletableFuture.completedFuture(null);
     }
   }
 
+  /**
+   * Events successfully processed by this operator.
+   * @return num successful events.
+   */
   public long numEventsProcessed() {
     return eventsProcessed.get();
+  }
+
+  /**
+   * Events failed processing by this operator.
+   * @return num failed events.
+   */
+  public long numEventsFailedProcessing() {
+    return eventsFailedProcessing.get();
   }
 
   /**
