@@ -1,4 +1,4 @@
-# streaming-aggregator
+# Netflix HTTP Stream Aggregator
 
 ## Build Instructions
 
