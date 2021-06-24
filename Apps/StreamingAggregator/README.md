@@ -1,5 +1,5 @@
 
-# Problem Statement
+# Problem Statement 1
 <p>In reality, a single processor or machine cannot handle the input volume. Input RPS can be in the 10,000s or 100,000s. How do you scale your solution in a 
 distributed environment?</p>
 
@@ -134,4 +134,145 @@ with the host info. Note that, this would warrant task-coordinator service to ne
 Resource management frameworks like YARN expose these functionality to the applications that can be leveraged by our system to achieve reduced recovery times. </p>  
 
 ## Conclusion
-The above design outlines the requirements and design principles to achieve a high-throughput stream processing system that can scale horizontally. The framework can be run on a shared multi-core computing infrastructure, which can schedule new task-shells during the runtime depending on the application requirements. Parallelizing task execution with minimal task coordination, along with efficient operator state management can help realize a high-throughput streaming system.
+The above design outlines the requirements and design principles to achieve a high-throughput stream processing system that can scale horizontally. 
+The framework can be run on a shared multi-core computing infrastructure, which can schedule new task-shells during the runtime depending on the application requirements. 
+Parallelizing task execution with minimal to no inter-task coordination, along with efficient operator state management can help realize a high-throughput streaming system.
+
+
+
+# Problem Statement 2
+ 
+Input volume can vary significantly throughout the day, i.e. many customers watch Netflix in the evening, 
+there can be a spike with the launch of a new show, etc. How do you handle such variations in data volume while balancing 
+resource utilization efficiency?
+
+# Solution
+
+The solution to this problem builds on top of the previous problem. Even though the load profile of the streams can 
+be assumed to be the same as the one used in the above problem, there are some additional characterizations that need to be 
+made before sketching a clean design for this classic dynamic scaling problem. Before getting into the actual design 
+considerations, the following helps us characterize the problem space.
+
+## System Characterization and Assumptions
+<ol>
+<li>
+The stream processing jobs that are running in the system are primarily long-lived jobs that can span days or months if 
+left uninterrupted. 
+</li>
+<li>
+Events originate from a partitioned streaming source whose partitions are fairly balanced avoiding any “hot partition” 
+in the stream. Consequently, all the parallel tasks operating on these partitions are dealing with almost equal load from 
+the streaming source.
+</li>
+<li>
+Stream processing jobs in the system can emit metrics to capture the record lag, resource utilization (CPU, memory), 
+along with per-operator idleness per sec. Also, the assumption here is that these metrics can be published in near 
+real-time to external systems, which can proactively take scaling decisions based on these input metrics.
+</li>
+<li>
+A single task can consume from multiple partitions of a single stream. This slightly deviates from the model used 
+in the previous problem. However, this model is equally valid and can be seen in real-world stream processing engines 
+like Apache Flink, which can have a single task consume data from multiple topic partitions. 
+</li>
+<li>
+We assume that the streaming job’s parallelism cannot be changed during the runtime of the job execution. Parallelism 
+needs to be specified during the job startup phase. 
+</li>
+<li>
+Stream processing tasks need to have the ability to take a savepoint of their current operator’s state via external triggers, 
+and these tasks should have the capability to reload their states from a savepoint during a job restart.
+</li>
+<li>
+State size acts as the primary bottleneck among stateful stream processing jobs. 
+</li>
+<li>
+A stream processing job cannot be considered active and running until all the operators/tasks have loaded their states 
+from a previous savepoint.
+</li>
+<li>
+We assume that the majority of the tasks that get auto-scaled are stateless tasks, which can be rebalanced and started in a 
+new task-shell or host with minimal downtime.
+</li>
+<li>
+The traffic profile is fairly predictable with known patterns during the day with occasional outliers and burstiness like a 
+sudden popular Netflix show, etc. 
+</li>
+<li>
+The final assumption made in the system is to prefer over-provisioning over under-provisioning of resources. 
+This assumption and design choice allows us to meet the strict SLAs in the event of spikes and unpredictable traffic bursts. 
+</li>
+</ol>
+
+## Traditional Approach
+<p>The traditional and naive approach to alleviate stream consumption lag buildup is to over-provision the servers needed to 
+run the stream processing jobs. Users can configure a static size cluster with max servers at a level that can handle peak 
+traffic plus some extra wiggle room to handle bursts. These approaches result in huge operational cost since extra provisioned 
+resources remain un-utilized under low loads, which could have been turned off to save cost for the organization.
+</p>
+
+<p>To downscale the cluster under low-loads, we could resort to a manual restart of jobs depending on the load. This can 
+avoid the excess operational cost on idle resources. However, this is a reactive approach that requires several humans to 
+monitor and resize the jobs based on the observed load, and can be extremely cumbersome. 
+</p>
+
+## Dynamic Re-scaling of Streaming Jobs 
+
+### Rationale
+<p>We can resort to building a system around the stream processing framework that can dynamically make scaling decisions 
+based on metrics generated by the job. The stream processing jobs can be instrumented to send measurements about the current 
+state of the system. These metrics can then be analyzed and processed to make a scaling decision. Finally, this decision 
+needs to be executed to scale up or scale down the stream processing job. Following sections describe the metrics that can 
+be used to make scaling decisions.
+</p>
+
+### Custom Metrics Based Autoscaling Policy
+Although CPU and memory utilization metrics provide useful insight into the running state of the tasks, they might not 
+be the only metrics to choose while making a scaling decision. For example, it is not uncommon for a CPU-intensive task 
+running in a single thread to take up more than 80% of the CPU core. However, scaling this task does not allow us to 
+reduce the CPU utilization if the nature of the processing is CPU bound. Similarly, memory usage might not always be 
+correlated to a backpressure scenario in a pipelined execution of operators. Hence, we can use the following two metrics as 
+a reliable indicator of the stream processor state:
+
+<ol>
+<li> 
+<b>Operator Idleness:</b>  
+<p>This metric represents the percentage of time for which an operator in a task was idle in a second. In order to 
+extract this metric from the task operator, we can have a lightweight instrumentation to monitor streaming applications 
+at the operator level, specifically the proportion of time each operator instance spends doing useful computations. 
+A higher value of operator idleness indicates an over-provisioning scenario and vice versa. 
+</p>
+</li>
+<li>
+<b>Consumer Lag:</b>
+<p>This metric describes how far the consumer offsets are lagging behind when compared to the stream’s latest offset. This metric needs to be normalized to understand the overall trend, (i.e.), whether the lag is remaining constant or is it going up/down. These trends allow us to make a clear scaling decision. Note that, a constant lag can be a resultant of a job restart that is not over-provisioned, in which case, the system will not be able to process events in real-time because of the constant system lag. 
+By using the above two metrics, viz. operator idleness and consumer record lag, we should be able to make accurate decisions around scaling needs for the running jobs. The scaling factor can be based on a desired value for the aforementioned metrics, and the system can be scaled up and down depending on whether the current value is higher or lower than the desired value.
+For eg., a simple way to compute the desired degree of parallelism could be :
+</p> 
+
+desired_parallelism = current_parallelism × current_value/desired_value
+
+<p>The above equation assumes that the job can handle tasks proportional to the “desired_parallelism”, and a scaling 
+decision will bring the “current_value” to be closer to the “desired_value”.</p>
+</li>
+</ol>
+
+### Impact of State Size on Scaling
+
+<p>As alluded before, operator states can be a huge bottleneck when the tasks need to be scaled up and down. 
+The majority of the downtime during a scaling operation is due to the loading of state from the persistent storage. 
+This is especially true for long-running stateful operators that can incur huge operational states in the order of a 
+few 10s of GB. Hence, the duration of initialization of the operators/tasks from a savepoint needs to be accounted for 
+while making scaling decisions.
+</p>
+<p>
+The operator state needs to be partitioned by key, and upon restarts, operators need to reload only from relevant key 
+partitions. The operator’s state size can correlate linearly with the load times. Hence, a good estimate on downtime 
+based on the state size will allow us to predict the approximate additional lag the restart will cause, and this needs 
+to be factored in to ensure that the SLAs are not violated.
+</p>
+
+## Conclusion
+<p>With a good auto-scaling architecture and policy, long-running stream processing jobs will be able to keep up with 
+changing workloads while utilizing resources effectively. 
+</p>
+

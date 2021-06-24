@@ -22,6 +22,7 @@ public class AggregateKey implements Serializable {
 
   @Override
   public String toString() {
-    return "\"device\":" + "\"" + device  + "\"" + ",\"title\":" + "\"" + title + "\"" + ",\"country\":" + country + "\"";
+    return "\"device\":" + "\"" + device  + "\"" + ",\"title\":" + "\"" + title + "\"" + ",\"country\":"
+        + "\"" + country + "\"";
   }
 }
